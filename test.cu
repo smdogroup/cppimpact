@@ -3,18 +3,17 @@
 #include <chrono>
 #include <string>
 
-#include "include/analysis.h"
-#include "include/cppimpact_defs.h"
-#include "include/elastoplastic.h"
-#include "include/mesh.h"
-#include "include/physics.h"
-#include "include/tetrahedral.h"
-#include "include/wall.h"
+#include "include/solver/analysis.h"
+#include "include/solver/mesh.h"
+#include "include/solver/physics.h"
+#include "include/solver/tetrahedral.h"
+#include "include/solver/wall.h"
+#include "include/utils/cppimpact_defs.h"
 
 #ifdef CPPIMPACT_CUDA_BACKEND
-#include "include/dynamics.cuh"
+#include "include/solver/dynamics.cuh"
 #else
-#include "include/dynamics.h"
+#include "include/solver/dynamics.h"
 #endif
 
 // Function to print matrix for manual verification
@@ -63,7 +62,7 @@ int main(int argc, char *argv[]) {
   T Y0 = 1.9 * std::sqrt(3.0);
   std::string name = "AL6061";
 
-  Elastoplastic<T, dof_per_node> material(E, rho, nu, beta, H, Y0, name);
+  Material material(E, rho, nu, beta, H, Y0, name.c_str());
   printf("Material: %s\n", name.c_str());
   int load_success = tensile.load_mesh(filename);
   if (load_success != 0) {

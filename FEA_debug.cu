@@ -5,20 +5,20 @@
 #include <string>
 
 // clang-format off
-#include "include/simulation_config.h"
-#include "include/analysis.h"
+#include "include/config/simulation_config.h"
+#include "include/solver/analysis.h"
 // clang-format on
 
-#include "include/cppimpact_defs.h"
-#include "include/elastoplastic.h"
-#include "include/physics.h"
+#include "include/materials/linear_elastic.h"
+#include "include/solver/physics.h"
+#include "include/solver/wall.h"
 #include "include/tetrahedral.h"
-#include "include/wall.h"
+#include "include/utils/cppimpact_defs.h"
 
 #ifdef CPPIMPACT_CUDA_BACKEND
-#include "include/dynamics.cuh"
+#include "include/solver/dynamics.cuh"
 #else
-#include "include/dynamics.h"
+#include "include/solver/dynamics.h"
 #endif
 
 // Function to print a 3x3 matrix
@@ -58,6 +58,7 @@ int main(int argc, char* argv[]) {
   Mesh<T, Basis::nodes_per_element> tensile;
 
   std::string filename;
+
 #if defined(USE_LINEAR_BASIS)
   switch (input_file) {
     case 0:
@@ -67,7 +68,6 @@ int main(int argc, char* argv[]) {
     case 1:
       filename = "../input/0.25 cube calculix linear 5758 elem.inp";
       printf("Using linear tetrahedral cube\n");
-
       break;
     default:
       std::cerr << "Invalid input_file for linear basis: " << input_file
@@ -96,6 +96,32 @@ int main(int argc, char* argv[]) {
 #error "No basis type defined"
 #endif
 
+  // T expected_strain_energy = 0.0;
+  // switch (input_file) {
+  //   case 0:  // Tetrahedral element
+  //     switch (deformation) {
+  //       case 0:  // Constant strain
+  //         expected_strain_energy = 897723938.3331999;
+  //         break;
+
+  //       case 1:  // Linearly varying strain
+
+  //         break;
+  //     }
+  //     break;
+
+  //   case 1:  // Cube
+  //     switch (deformation) {
+  //       case 0:  // Constant strain
+
+  //         break;
+  //       case 1:  // Linearly varying strain
+
+  //         break;
+  //     }
+  //     break;
+  // }
+
   // Material Properties
   T E = 68.9E9;  // Pa
   T rho = 2700;  // kg/m3
@@ -105,7 +131,7 @@ int main(int argc, char* argv[]) {
   T Y0 = 1.9 * std::sqrt(3.0);
   std::string name = "AL6061";
 
-  Elastoplastic<T, dof_per_node> material(E, rho, nu, beta, H, Y0, name);
+  LinearElastic<T, dof_per_node> material(E, rho, nu, beta, H, Y0, name);
   tensile.load_mesh(filename);
 
   const int normal = 1;

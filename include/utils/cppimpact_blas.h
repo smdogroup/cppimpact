@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cppimpact_defs.h"
+#include "../utils/cppimpact_defs.h"
 
 enum class MatOp { NoTrans, Trans };
 

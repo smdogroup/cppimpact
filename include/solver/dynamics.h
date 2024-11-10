@@ -6,14 +6,12 @@
 #include <iostream>
 #include <numeric>
 
-#include "basematerial.h"
-#include "cppimpact_defs.h"
-#include "cppimpact_utils.h"
-#include "dynamics_kernels.cuh"
+#include "../utils/cppimpact_utils.h"
+#include "dynamics_kernels.h"
 #include "mesh.h"
-#include "tetrahedral.h"
 #include "wall.h"
 
+// TODO: Make wall optional
 template <typename T, class Basis, class Analysis, class Quadrature>
 class Dynamics {
  private:
@@ -46,10 +44,11 @@ class Dynamics {
   int ndof;
   static constexpr int nodes_per_element = Basis::nodes_per_element;
   static constexpr int spatial_dim = Basis::spatial_dim;
-  static constexpr int num_quadrature_pts = Quadrature::num_quadrature_pts;
   static constexpr int dof_per_node = spatial_dim;
+  static constexpr int num_quadrature_pts = Quadrature::num_quadrature_pts;
+
   Mesh<T, nodes_per_element> *mesh;
-  BaseMaterial<T, dof_per_node> *material;
+  Material *material;
   Wall<T, 2, Basis> *wall;
   T *global_xloc;
   T *vel;
@@ -61,8 +60,7 @@ class Dynamics {
   T *vel_i;
   int timestep;
 
-  Dynamics(Mesh<T, nodes_per_element> *input_mesh,
-           BaseMaterial<T, dof_per_node> *input_material,
+  Dynamics(Mesh<T, nodes_per_element> *input_mesh, Material *input_material,
            Wall<T, 2, Basis> *input_wall = nullptr)
       : mesh(input_mesh),
         material(input_material),
@@ -111,7 +109,7 @@ class Dynamics {
   }
 
   void export_to_vtk(int timestep, T *vel_i, T *acc_i, T *mass_i) {
-    const std::string directory = "../gpu_output";
+    const std::string directory = "../cpu_output";
     const std::string filename =
         directory + "/simulation_" + std::to_string(timestep) + ".vtk";
     std::ofstream vtkFile(filename);
@@ -206,6 +204,24 @@ class Dynamics {
               << global_strains[6 * i + 5] << "\n";  // Sixth component (e_yz)
     }
 
+    // First part of the stress
+    vtkFile << "VECTORS stress1 double\n";
+    for (int i = 0; i < mesh->num_nodes; ++i) {
+      vtkFile << global_stress[6 * i + 0] << " "  // First component (sigma_xx)
+              << global_stress[6 * i + 1] << " "  // Second component (sigma_yy)
+              << global_stress[6 * i + 2]
+              << "\n";  // Third component (sigma_zz)
+    }
+
+    // Second part of the stress
+    vtkFile << "VECTORS stress2 double\n";
+    for (int i = 0; i < mesh->num_nodes; ++i) {
+      vtkFile << global_stress[6 * i + 3] << " "  // Fourth component (sigma_xy)
+              << global_stress[6 * i + 4] << " "  // Fifth component (sigma_xz)
+              << global_stress[6 * i + 5]
+              << "\n";  // Sixth component (sigma_yz)
+    }
+
     vtkFile << "VECTORS acceleration double\n";
     for (int i = 0; i < mesh->num_nodes; ++i) {
       for (int j = 0; j < 3; ++j) {
@@ -282,77 +298,118 @@ class Dynamics {
     file.close();
   }
 
-  void allocate() {
-    // allocate global data on device
-    cudaMalloc(&d_global_dof, sizeof(T) * ndof);
-    cudaMalloc(&d_global_acc, sizeof(T) * ndof);
-    cudaMalloc(&d_global_mass, sizeof(T) * ndof);
-    cudaMalloc(&d_vel, sizeof(T) * ndof);
-    cudaMalloc(&d_vel_i, sizeof(T) * ndof);
-    cudaMalloc(&d_global_xloc, sizeof(T) * ndof);
-    cudaMalloc(&d_element_nodes,
-               sizeof(int) * nodes_per_element * mesh->num_elements);
-    cudaMalloc(&d_global_strains, sizeof(T) * mesh->num_nodes * 6);
-    cudaMalloc(&d_global_stress, sizeof(T) * mesh->num_nodes * 6);
+  void debug_strain(const T alpha, const int def_case) {
+    memcpy(global_xloc, mesh->xloc,
+           ndof * sizeof(T));  // mesh->xloc will store initial positions
+    T *global_dof = new T[ndof];
 
-    cudaMalloc((void **)&d_material, sizeof(decltype(*material)));
-    cudaMalloc((void **)&d_wall, sizeof(decltype(*d_wall)));
+    memset(global_dof, 0, sizeof(T) * ndof);
 
-    // Explicitly allocate dynamic-allocated member
-    cudaMalloc((void **)&(d_wall_slave_node_indices),
-               sizeof(int) * mesh->num_slave_nodes);
+    for (int i = 0; i < mesh->num_nodes; i++) {
+      T x = global_xloc[i * 3 + 0];
+      T y = global_xloc[i * 3 + 1];
+      T z = global_xloc[i * 3 + 2];
 
-    cudaMemset(d_global_dof, T(0.0), sizeof(T) * ndof);
-    cudaMemset(d_global_acc, T(0.0), sizeof(T) * ndof);
-    cudaMemset(d_global_mass, T(0.0), sizeof(T) * ndof);
-    cudaMemset(d_vel_i, T(0.0), sizeof(T) * ndof);
+      switch (def_case) {
+        case 0:
+          if (i == 0) {
+            printf("Constant displacement case\n");
+          }
 
-    cudaMemset(d_global_strains, T(0.0), sizeof(T) * mesh->num_nodes * 6);
-    cudaMemset(d_global_stress, T(0.0), sizeof(T) * mesh->num_nodes * 6);
+          global_dof[i * 3 + 0] = alpha * x;
+          global_dof[i * 3 + 1] = -alpha * x * material->nu;
+          global_dof[i * 3 + 2] = -alpha * x * material->nu;
+          break;
+        case 1:
+          if (i == 0) {
+            printf("Linear displacement case\n");
+          }
+          global_dof[i * 3 + 0] = alpha * 0.5 * x * x;
+          global_dof[i * 3 + 1] = -alpha * 0.5 * x * x * material->nu;
+          global_dof[i * 3 + 2] = -alpha * 0.5 * x * x * material->nu;
+          break;
+        default:
+          break;
+      }
+    }
 
-    cudaMemcpy(d_global_xloc, mesh->xloc, ndof * sizeof(T),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_element_nodes, mesh->element_nodes,
-               sizeof(int) * nodes_per_element * mesh->num_elements,
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_vel, vel, ndof * sizeof(T), cudaMemcpyHostToDevice);
+    memset(vel, 0, sizeof(T) * ndof);
+    memset(global_acc, 0, sizeof(T) * ndof);
+    memset(global_mass, 0, sizeof(T) * ndof);
+    memset(global_strains, 0, sizeof(T) * 6 * mesh->num_nodes);
+    memset(global_stress, 0, sizeof(T) * 6 * mesh->num_nodes);
 
-    // Copy Material is easy for now as it doesn't contain dynamically-allocated
-    // data
-    cudaMemcpy(d_material, material, sizeof(decltype(*material)),
-               cudaMemcpyHostToDevice);
+    constexpr int dof_per_element = spatial_dim * nodes_per_element;
+    // Allocate element quantities
+    std::vector<T> element_xloc(dof_per_element);
+    std::vector<T> element_dof(dof_per_element);
+    std::vector<int> this_element_nodes(nodes_per_element);
 
-    // Copy over POD members
-    cudaMemcpy(d_wall, wall, sizeof(decltype(*wall)), cudaMemcpyHostToDevice);
+    T total_energy = 0.0;
+    T total_volume = 0.0;
+    T node_coords[spatial_dim];
+    T element_strains[6];
+    T element_stress[6];
 
-    // Copy over dynamic data
-    cudaMemcpy(d_wall_slave_node_indices, wall->slave_node_indices,
-               sizeof(int) * mesh->num_slave_nodes, cudaMemcpyHostToDevice);
+    for (int i = 0; i < mesh->num_elements; i++) {
+      memset(node_coords, 0, sizeof(T) * spatial_dim);
 
-    // Point device object's data pointer to the device memory
-    cudaMemcpy(&(d_wall->slave_node_indices), &d_wall_slave_node_indices,
-               sizeof(int *), cudaMemcpyHostToDevice);
-  }
+      for (int k = 0; k < dof_per_element; k++) {
+        element_xloc[k] = 0.0;
+        element_dof[k] = 0.0;
+      }
 
-  void deallocate() {
-    cudaFree(d_global_dof);
-    cudaFree(d_global_acc);
-    cudaFree(d_global_mass);
-    cudaFree(d_vel);
-    cudaFree(d_vel_i);
-    cudaFree(d_global_xloc);
-    cudaFree(d_element_nodes);
-    cudaFree(d_material);
-    cudaFree(d_wall);
-    cudaFree(d_wall_slave_node_indices);
-    cudaFree(d_global_strains);
-    cudaFree(d_global_stress);
+      for (int j = 0; j < nodes_per_element; j++) {
+        this_element_nodes[j] = mesh->element_nodes[nodes_per_element * i + j];
+      }
+
+      // Get the element locations
+      Analysis::template get_element_dof<spatial_dim>(
+          this_element_nodes.data(), global_xloc, element_xloc.data());
+
+      // Get the element degrees of freedom
+      Analysis::template get_element_dof<spatial_dim>(
+          this_element_nodes.data(), global_dof, element_dof.data());
+
+      T element_W = Analysis::calculate_strain_energy(
+          element_xloc.data(), element_dof.data(), material);
+
+      T element_volume = Analysis::calculate_volume(
+          element_xloc.data(), element_dof.data(), material);
+
+      for (int node = 0; node < nodes_per_element; node++) {
+        memset(element_strains, 0, sizeof(T) * 6);
+        for (int k = 0; k < spatial_dim; k++) {
+          node_coords[k] = element_xloc[node * spatial_dim + k];
+        }
+        Analysis::calculate_stress_strain(
+            element_xloc.data(), element_dof.data(), node_coords,
+            element_strains, element_stress, material);
+        int node_idx = this_element_nodes[node];
+        for (int k = 0; k < 6; k++) {
+          global_strains[node_idx * 6 + k] = element_strains[k];
+          global_stress[node_idx * 6 + k] = element_stress[k];
+          // #ifdef
+          // printf("Node %d, Strain %d: %f\n", node_idx, k,
+          // element_strains[k]); #endif
+        }
+      }
+
+      total_energy += element_W;
+      total_volume += element_volume;
+    }
+
+    printf("Total Strain Energy = %f\n", total_energy);
+    printf("Total Volume = %f\n", total_volume);
+
+    for (int i = 0; i < ndof; i++) {
+      global_xloc[i] += global_dof[i];
+    }
+
+    export_to_vtk(0, vel, global_acc, global_mass);
   }
 
   void solve(double dt, double time_end, int export_interval) {
-    // Allocate global device data
-    allocate();
-
     // Perform a dynamic analysis. The algorithm is staggered as follows:
     // This assumes that the initial u, v, a and fext are already initialized
     // at nodes.
@@ -374,172 +431,81 @@ class Dynamics {
     // ------------------- Initialization -------------------
     printf("Solving dynamics\n");
 
-    // a. A0 = (Fext - Fint(U0))/M
-    // Loop over all elements
+    // Material and mesh information
+    int *element_nodes = mesh->element_nodes;
 
-    // Rounds up to the nearest multiple of 32
-    constexpr int nodes_per_elem_num_quad =
-        nodes_per_element * num_quadrature_pts;
-    constexpr int threads_per_block =
-        ((nodes_per_elem_num_quad + 31) / 32) * 32;
+    // Initialize global data
+    memcpy(global_xloc, mesh->xloc,
+           ndof * sizeof(T));  // mesh->xloc will store initial positions
+    for (int i = 0; i < ndof; i++) {
+      global_dof[i] = 0.0;
+      global_acc[i] = 0.0;
+      global_mass[i] = 0.0;
+    }
 
-    T time = 0.0;
-    // update<T, spatial_dim, nodes_per_element>
-    //     <<<mesh->num_elements, threads_per_block>>>(
-    //         mesh->num_elements, dt, d_material, d_wall, d_element_nodes,
-    //         d_vel, d_global_xloc, d_global_dof, d_global_acc, d_global_mass,
-    //         nodes_per_elem_num_quad, time);
+    // Intermediate velocity for vtk export
+    for (int i = 0; i < ndof; i++) {
+      vel_i[i] = 0.0;
+    }
+    double time = 0.0;
+    // Initialize states
+    update<T, spatial_dim, nodes_per_element>(
+        mesh->num_nodes, mesh->num_elements, ndof, dt, material, wall, mesh,
+        element_nodes, vel, global_xloc, global_dof, global_acc, global_mass,
+        global_strains, global_stress, time);
 
-    // Do we need this?
-    cudaDeviceSynchronize();
-
-    const int node_blocks = mesh->num_nodes / 32 + 1;
-    const int ndof_blocks = ndof / 32 + 1;
-    external_forces<T><<<node_blocks, 32>>>(mesh->num_nodes, d_wall,
-                                            d_global_xloc, d_global_dof,
-                                            d_global_mass, d_global_acc);
-
-    cudaMemcpy(global_acc, d_global_acc, sizeof(T) * ndof,
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(global_xloc, d_global_xloc, sizeof(T) * ndof,
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(global_mass, d_global_mass, sizeof(T) * ndof,
-               cudaMemcpyDeviceToHost);
-    cudaDeviceSynchronize();
-
-    update_velocity<T><<<ndof_blocks, 32>>>(ndof, dt, d_vel, d_global_acc);
+    // b.Stagger V0 .5 = V0 + dt / 2 * a0
+    // Update velocity
     for (int i = 0; i < ndof; i++) {
       vel[i] += 0.5 * dt * global_acc[i];
     }
 
-    array_to_txt<T>("gpu_vel.txt", vel, ndof);
-    array_to_txt<T>("gpu_xloc.txt", global_xloc, ndof);
+    array_to_txt<T>("cpu_vel.txt", vel, ndof);
+    array_to_txt<T>("cpu_xloc.txt", global_xloc, ndof);
 
-    // Time Loop
-
-    cudaStream_t *streams;
-    int num_c = 6;
-    streams = new cudaStream_t[num_c];
-
-    for (int c = 0; c < num_c; c++) {
-      cudaStreamCreateWithFlags(&streams[c], cudaStreamNonBlocking);
-    }
-
-#ifdef CPPIMPACT_DEBUG_MODE
-    cuda_show_kernel_error();
-#endif
-    // return;
-
-    // {
-    //   cudaMemcpyAsync(vel_i, d_vel, ndof * sizeof(T), cudaMemcpyDeviceToHost,
-    //                   streams[0]);
-    //   cudaMemcpyAsync(global_acc, d_global_acc, ndof * sizeof(T),
-    //                   cudaMemcpyDeviceToHost, streams[1]);
-    //   cudaMemcpyAsync(global_mass, d_global_mass, ndof * sizeof(T),
-    //                   cudaMemcpyDeviceToHost, streams[2]);
-    //   cudaMemcpyAsync(global_xloc, d_global_xloc, ndof * sizeof(T),
-    //                   cudaMemcpyDeviceToHost, streams[3]);
-
-    //   cudaStreamSynchronize(streams[0]);
-    //   cudaStreamSynchronize(streams[1]);
-    //   cudaStreamSynchronize(streams[2]);
-    //   cudaStreamSynchronize(streams[3]);
-    //   export_to_vtk(timestep, vel_i, global_acc, global_mass, global_xloc);
-    // };
+    //------------------- End of Initialization -------------------
+    // ------------------- Start of Time Loop -------------------
 
     while (time <= time_end) {
-      cudaMemsetAsync(d_global_acc, T(0.0), sizeof(T) * ndof, streams[0]);
-      cudaMemsetAsync(d_global_dof, T(0.0), sizeof(T) * ndof, streams[1]);
-      // cudaMemsetAsync(d_global_mass, T(0.0), sizeof(T) * ndof, streams[2]);
-      cudaStreamSynchronize(streams[0]);
-      cudaStreamSynchronize(streams[1]);
-      cudaStreamSynchronize(streams[2]);
       printf("Time: %f\n", time);
 
-      update_dof<T>
-          <<<ndof_blocks, 32, 0, streams[0]>>>(ndof, dt, d_vel, d_global_dof);
-      cudaStreamSynchronize(streams[0]);
+      memset(global_dof, 0, sizeof(T) * ndof);
+      // 1. Compute U1 = U +dt*V0.5
+      // Update nodal displacements
+      for (int j = 0; j < ndof; j++) {
+        global_dof[j] = dt * vel[j];
+      }
 
-      update<T, spatial_dim, nodes_per_element>
-          <<<mesh->num_elements, threads_per_block, 0, streams[0]>>>(
-              mesh->num_elements, dt, d_material, d_wall, d_element_nodes,
-              d_vel, d_global_xloc, d_global_dof, d_global_acc, d_global_mass,
-              d_global_strains, d_global_stress, nodes_per_elem_num_quad, time);
-      cudaStreamSynchronize(streams[0]);
+      update<T, spatial_dim, nodes_per_element>(
+          mesh->num_nodes, mesh->num_elements, ndof, dt, material, wall, mesh,
+          element_nodes, vel, global_xloc, global_dof, global_acc, global_mass,
+          global_strains, global_stress, time);
 
-      external_forces<T><<<node_blocks, 32, 0, streams[0]>>>(
-          mesh->num_nodes, d_wall, d_global_xloc, d_global_dof, d_global_mass,
-          d_global_acc);
-      cudaStreamSynchronize(streams[0]);
+      // Compute total mass (useful?)
+      T total_mass = 0.0;
+      for (int i = 0; i < ndof; i++) {
+        total_mass += global_mass[i] / 3.0;
+      }
+      // printf("mass: %30.15e\n", total_mass);
 
-      timeloop_update<T><<<ndof_blocks, 32, 0, streams[0]>>>(
-          ndof, dt, d_global_xloc, d_vel, d_global_acc, d_vel_i, d_global_dof);
-      cudaStreamSynchronize(streams[0]);
+      // 3. Compute V1.5 = V0.5 + A1*dt
+      // 3. Compute V1 = V1.5 - dt/2 * a1
+      // 4. Loop back to 1.
 
-      // TODO: exporting
+      for (int i = 0; i < ndof; i++) {
+        global_xloc[i] += global_dof[i];
+        vel[i] += dt * global_acc[i];
+
+        // TODO: only run this on export steps
+        vel_i[i] = vel[i] - 0.5 * dt * global_acc[i];
+      }
+
       if (timestep % export_interval == 0) {
-        cudaMemcpyAsync(vel_i, d_vel, ndof * sizeof(T), cudaMemcpyDeviceToHost,
-                        streams[0]);
-        cudaMemcpyAsync(global_acc, d_global_acc, ndof * sizeof(T),
-                        cudaMemcpyDeviceToHost, streams[1]);
-        cudaMemcpyAsync(global_mass, d_global_mass, ndof * sizeof(T),
-                        cudaMemcpyDeviceToHost, streams[2]);
-        cudaMemcpyAsync(global_xloc, d_global_xloc, ndof * sizeof(T),
-                        cudaMemcpyDeviceToHost, streams[3]);
-        cudaMemcpyAsync(global_strains, d_global_strains,
-                        mesh->num_nodes * 6 * sizeof(T), cudaMemcpyDeviceToHost,
-                        streams[4]);
-        cudaMemcpyAsync(global_stress, d_global_stress,
-                        mesh->num_nodes * 6 * sizeof(T), cudaMemcpyDeviceToHost,
-                        streams[5]);
-
-        cudaStreamSynchronize(streams[0]);
-        cudaStreamSynchronize(streams[1]);
-        cudaStreamSynchronize(streams[2]);
-        cudaStreamSynchronize(streams[3]);
-        cudaStreamSynchronize(streams[4]);
-        cudaStreamSynchronize(streams[5]);
-        // TODO: add support for strain output
         export_to_vtk(timestep, vel_i, global_acc, global_mass);
-        probe_node(13648);
-        probe_node(13649);
-        probe_node(13650);
-        probe_node(13651);
-        probe_node(13652);
-      };
-
+        probe_node(96);
+      }
       time += dt;
       timestep += 1;
-
-#ifdef CPPIMPACT_DEBUG_MODE
-      cuda_show_kernel_error();
-#endif
     }
-
-    for (int c = 0; c < num_c; c++) {
-      cudaStreamDestroy(streams[c]);
-    }
-    delete[] streams;
-
-    deallocate();
   }
-
- private:
-  // Host data pointers
-
-  // Device data pointers
-  T *d_global_dof = nullptr;
-  T *d_global_acc = nullptr;
-  T *d_global_mass = nullptr;
-  T *d_vel = nullptr;
-  T *d_vel_i = nullptr;
-  T *d_global_xloc = nullptr;
-  T *d_global_strains = nullptr;
-  T *d_global_stress = nullptr;
-
-  int *d_element_nodes = nullptr;
-
-  BaseMaterial<T, spatial_dim> *d_material = nullptr;
-  Wall<T, 2, Basis> *d_wall = nullptr;
-  int *d_wall_slave_node_indices = nullptr;
 };

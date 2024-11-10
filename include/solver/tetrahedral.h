@@ -2,7 +2,8 @@
 
 #include <iostream>
 
-#include "cppimpact_defs.h"
+#include "../config/simulation_config.h"
+#include "../utils/cppimpact_defs.h"
 
 class TetrahedralQuadrature5pts {
  public:
@@ -484,8 +485,8 @@ spatial_dim * k + 2], Nxi[spatial_dim * i + 2] * dof[dim * i + k]);
   }
 
   template <int dof_per_node>
-  static CPPIMPACT_FUNCTION void calculate_D_matrix(
-      BaseMaterial<T, dof_per_node>* material, T* D_matrix) {
+  static CPPIMPACT_FUNCTION void calculate_D_matrix(Material* material,
+                                                    T* D_matrix) {
     // Fill the matrix
     D_matrix[0 * 6 + 0] = D_matrix[1 * 6 + 1] = D_matrix[2 * 6 + 2] =
         1 - material->nu;
@@ -636,9 +637,8 @@ class TetrahedralBasisLinear {
     }
   }
 
-  template <int dof_per_node>
-  static CPPIMPACT_FUNCTION void calculate_D_matrix(
-      BaseMaterial<T, dof_per_node>* material, T* D_matrix) {
+  static CPPIMPACT_FUNCTION void calculate_D_matrix(Material* material,
+                                                    T* D_matrix) {
     // Fill the matrix
     D_matrix[0 * 6 + 0] = D_matrix[1 * 6 + 1] = D_matrix[2 * 6 + 2] =
         1 - material->nu;

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "cppimpact_defs.h"
-#include "elastoplastic.h"
-#include "physics.h"
-#include "tetrahedral.h"
+#include "../solver/analysis.h"
+#include "../solver/physics.h"
+#include "../solver/tetrahedral.h"
+#include "../utils/cppimpact_defs.h"
 
 // Forward declaration of the FEAnalysis template
 template <typename T, class Basis, class Quadrature, class Physics>
@@ -31,6 +31,3 @@ using Physics = NeohookeanPhysics<T>;
 
 // Analysis Type
 using Analysis = FEAnalysis<T, Basis, Quadrature, Physics>;
-
-// Degrees of Freedom per Node
-constexpr int dof_per_node = 3;

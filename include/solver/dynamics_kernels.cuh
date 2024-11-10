@@ -1,16 +1,15 @@
 #pragma once
 
+#include "../config/common_definitions.h"
+#include "../config/simulation_config.h"
 #include "analysis.h"
-#include "basematerial.h"
 #include "physics.h"
-#include "simulation_config.h"
 #include "tetrahedral.h"
 #include "wall.h"
 
 // Update the system states via time-stepping
 template <typename T, int spatial_dim, int nodes_per_element>
-__global__ void update(int num_elements, T dt,
-                       BaseMaterial<T, spatial_dim> *d_material,
+__global__ void update(int num_elements, T dt, Material *d_material,
                        Wall<T, 2, Basis> *d_wall, const int *d_element_nodes,
                        const T *d_vel, const T *d_global_xloc,
                        const T *d_global_dof, T *d_global_acc, T *d_global_mass,
@@ -101,8 +100,8 @@ __global__ void update(int num_elements, T dt,
     Mr_inv = 1.0 / element_mass_matrix_diagonals[tid];
   }
 
-  Analysis::calculate_f_internal_gpu(tid, element_xloc, element_dof,
-                                     element_internal_forces, d_material);
+  d_material->calculate_f_internal(element_xloc, element_dof,
+                                   element_internal_forces);
   __syncthreads();
 
   // Calculate element acceleration

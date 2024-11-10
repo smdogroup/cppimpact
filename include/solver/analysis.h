@@ -2,12 +2,11 @@
 
 #include <cblas.h>
 
-#include "basematerial.h"
-#include "cppimpact_blas.h"
-#include "cppimpact_defs.h"
+#include "../config/simulation_config.h"
+#include "../utils/cppimpact_blas.h"
+#include "../utils/cppimpact_defs.h"
 #include "mesh.h"
 #include "physics.h"
-#include "simulation_config.h"
 #include "tetrahedral.h"
 
 template <typename T, class Basis, class Quadrature, class Physics>
@@ -161,135 +160,6 @@ class FEAnalysis {
     }
   }
 
-  static __device__ void calculate_f_internal_gpu(
-      int tid, const T *element_xloc, const T *element_dof, T *f_internal,
-      BaseMaterial<T, dof_per_node> *material) {
-    int constexpr dof_per_element = spatial_dim * nodes_per_element;
-    int i = tid / num_quadrature_pts;  // node index
-    int k = tid % num_quadrature_pts;  // quadrature index
-
-    // contiguous for each quadrature points
-    __shared__ T pts[num_quadrature_pts * spatial_dim];
-    __shared__ T dets[num_quadrature_pts];
-    __shared__ T wts[num_quadrature_pts];
-    __shared__ T J[num_quadrature_pts * spatial_dim * spatial_dim];
-    __shared__ T Jinv[num_quadrature_pts * spatial_dim * spatial_dim];
-    __shared__ T Nxis[num_quadrature_pts][dof_per_element];
-    __shared__ T B_matrix[num_quadrature_pts][6 * dof_per_element];
-    __shared__ T D_matrix[num_quadrature_pts][6 * 6];
-    __shared__ T B_T_D_B[num_quadrature_pts][dof_per_element * dof_per_element];
-    __shared__ T K_e[dof_per_element * dof_per_element];
-
-    if (tid == 0) {
-      memset(pts, 0, num_quadrature_pts * spatial_dim * sizeof(T));
-      memset(dets, 0, num_quadrature_pts * sizeof(T));
-      memset(wts, 0, num_quadrature_pts * sizeof(T));
-      memset(J, 0, num_quadrature_pts * spatial_dim * spatial_dim * sizeof(T));
-      memset(Jinv, 0,
-             num_quadrature_pts * spatial_dim * spatial_dim * sizeof(T));
-      memset(K_e, 0, sizeof(T) * dof_per_element * dof_per_element);
-    }
-
-    if (tid < num_quadrature_pts) {
-      memset(Nxis[tid], 0, dof_per_element * sizeof(T));
-      memset(B_matrix[tid], 0, 6 * dof_per_element * sizeof(T));
-      memset(D_matrix[tid], 0, 6 * 6 * sizeof(T));
-      memset(B_T_D_B[tid], 0, sizeof(T) * dof_per_element * dof_per_element);
-    }
-    __syncthreads();
-
-    int constexpr spatial_dim_2 = spatial_dim * spatial_dim;
-    int pts_offset = k * spatial_dim;
-    int J_offset = k * spatial_dim_2;
-
-    if (tid < num_quadrature_pts) {  // tid = quad point index
-      wts[tid] =
-          Quadrature::template get_quadrature_pt<T>(tid, pts + pts_offset);
-    }
-    __syncthreads();
-
-    if (tid < num_quadrature_pts) {
-      Basis::template eval_grad_gpu<num_quadrature_pts, spatial_dim>(
-          tid, pts + pts_offset, element_xloc, J + J_offset);
-    }
-
-    __syncthreads();
-
-    // Evaluate the derivative of the spatial dof in the computational
-    // coordinates
-
-    if (tid < num_quadrature_pts) {
-      int J_offset = tid * spatial_dim_2;
-      dets[tid] = det3x3_simple(J + J_offset);
-    }
-    __syncthreads();
-
-    if (tid == 0) {
-      // printf("J = [%f, %f, %f, %f, %f, %f, %f, %f, %f], det = %f\n",
-      //        J[0 + 1 * spatial_dim_2], J[1 + 1 * spatial_dim_2],
-      //        J[2 + 1 * spatial_dim_2], J[3 + 1 * spatial_dim_2],
-      //        J[4 + 1 * spatial_dim_2], J[5 + 1 * spatial_dim_2],
-      //        J[6 + 1 * spatial_dim_2], J[7 + J_offset], J[8 + J_offset],
-      //        dets[1]);
-
-      for (int detnum = 0; detnum < 5; detnum++) {
-        if (dets[detnum] <= 0) {
-          printf("det[%d] = %f\n", detnum, dets[detnum]);
-        }
-      }
-    }
-
-    __syncthreads();
-
-    if (tid < num_quadrature_pts * spatial_dim_2) {
-      // Compute the inverse and determinant of the Jacobian matrix
-      int k = tid / spatial_dim_2;  // quad index
-      int i = tid % spatial_dim_2;  // 0 ~ 8
-      inv3x3_gpu(i, J + J_offset, Jinv + J_offset, dets[k]);
-    }
-    __syncthreads();
-
-    // TODO: parallelize more
-    if (tid < num_quadrature_pts) {
-      Basis::calculate_B_matrix(Jinv + J_offset, pts + pts_offset,
-                                B_matrix[tid]);
-    }
-    __syncthreads();
-
-    if (tid < num_quadrature_pts) {
-      Basis::template calculate_D_matrix<dof_per_node>(material, D_matrix[tid]);
-    }
-
-    __syncthreads();
-    if (tid < num_quadrature_pts) {
-      calculate_B_T_D_B(B_matrix[tid], D_matrix[tid], B_T_D_B[tid]);
-    }
-
-    __syncthreads();
-
-    if (tid < num_quadrature_pts) {
-      for (int j = 0; j < dof_per_element * dof_per_element; j++) {
-        atomicAdd(&K_e[j], wts[tid] * dets[tid] * B_T_D_B[tid][j]);
-      }
-    }
-    __syncthreads();
-
-    if (tid == 0) {
-      for (int mkmk = 0; mkmk < 12; mkmk++) {
-        // printf("B_T_D_B = %f\n", element_xloc[mkmk]);
-      }
-    }
-
-    __syncthreads();
-
-    // TODO: parallelize
-    if (tid == 0) {
-      cppimpact_gemv<T, MatOp::NoTrans>(dof_per_element, dof_per_element, 1.0,
-                                        K_e, element_dof, 0.0, f_internal);
-    }
-    __syncthreads();
-  }
-
   static CPPIMPACT_FUNCTION void calculate_B_T_D_B(const T *B_matrix,
                                                    const T *D_matrix,
                                                    T *B_T_D_B) {
@@ -318,71 +188,8 @@ class FEAnalysis {
     }
   }
 
-  static void calculate_f_internal(const T *element_xloc, const T *element_dof,
-                                   T *f_internal,
-                                   BaseMaterial<T, dof_per_node> *material) {
-    T pt[spatial_dim];
-    T K_e[dof_per_element * dof_per_element];
-    memset(K_e, 0, sizeof(T) * dof_per_element * dof_per_element);
-
-    for (int i = 0; i < num_quadrature_pts; i++) {
-      T weight = Quadrature::template get_quadrature_pt<T>(i, pt);
-
-      // Evaluate the derivative of the spatial dof in the computational
-      // coordinates
-      T J[spatial_dim * spatial_dim];
-      memset(J, 0, spatial_dim * spatial_dim * sizeof(T));
-      Basis::template eval_grad<spatial_dim>(pt, element_xloc, J);
-
-      // standard basis here
-      // Compute the inverse and determinant of the Jacobian matrix
-      T Jinv[spatial_dim * spatial_dim];
-      memset(Jinv, 0, spatial_dim * spatial_dim * sizeof(T));
-      T detJ = inv3x3(J, Jinv);
-
-#ifdef CPPIMPACT_DEBUG_MODE
-      if (detJ < 0.0) {
-        printf("detJ negative\n");
-      }
-#endif
-
-      // Compute the B matrix
-      // PU used here
-
-      T J_PU[spatial_dim * spatial_dim];
-      memset(J_PU, 0, spatial_dim * spatial_dim * sizeof(T));
-      Basis::template eval_grad_PU<spatial_dim>(pt, element_xloc, J_PU);
-
-      T Jinv_PU[spatial_dim * spatial_dim];
-      memset(Jinv_PU, 0, spatial_dim * spatial_dim * sizeof(T));
-      T detJ_PU = inv3x3(J_PU, Jinv_PU);
-
-      T B_matrix[6 * spatial_dim * nodes_per_element];
-      memset(B_matrix, 0, 6 * spatial_dim * nodes_per_element * sizeof(T));
-      Basis::calculate_B_matrix(Jinv, pt, B_matrix);
-
-      // Compute the material stiffness matrix D
-      T D_matrix[6 * 6];
-      memset(D_matrix, 0, 6 * 6 * sizeof(T));
-      Basis::template calculate_D_matrix<dof_per_node>(material, D_matrix);
-
-      // Compute B^T * D * B
-      T B_T_D_B[dof_per_element * dof_per_element];
-      memset(B_T_D_B, 0, sizeof(T) * dof_per_element * dof_per_element);
-      calculate_B_T_D_B(B_matrix, D_matrix, B_T_D_B);
-
-      // Assemble the element stiffness matrix K_e
-      for (int j = 0; j < dof_per_element * dof_per_element; j++) {
-        K_e[j] += weight * detJ * B_T_D_B[j];
-      }
-    }
-
-    cppimpact_gemv<T, MatOp::NoTrans>(dof_per_element, dof_per_element, 1.0,
-                                      K_e, element_dof, 0.0, f_internal);
-  }
-
   static T calculate_strain_energy(const T *element_xloc, const T *element_dof,
-                                   BaseMaterial<T, dof_per_node> *material) {
+                                   Material *material) {
     T pt[spatial_dim];
     T K_e[dof_per_element * dof_per_element];
     memset(K_e, 0, sizeof(T) * dof_per_element * dof_per_element);
@@ -453,7 +260,7 @@ class FEAnalysis {
   }
 
   static T calculate_volume(const T *element_xloc, const T *element_dof,
-                            BaseMaterial<T, dof_per_node> *material) {
+                            Material *material) {
     T pt[spatial_dim];
 
     T volume = 0.0;
@@ -476,9 +283,11 @@ class FEAnalysis {
     return volume;
   }
 
-  static CPPIMPACT_FUNCTION void calculate_stress_strain(
-      const T *element_xloc, const T *element_dof, const T *pt, T *strain,
-      T *stress, BaseMaterial<T, dof_per_node> *material) {
+  static CPPIMPACT_FUNCTION void calculate_stress_strain(const T *element_xloc,
+                                                         const T *element_dof,
+                                                         const T *pt, T *strain,
+                                                         T *stress,
+                                                         Material *material) {
     T J[spatial_dim * spatial_dim];
     Basis::template eval_grad<spatial_dim>(pt, element_xloc, J);
 
