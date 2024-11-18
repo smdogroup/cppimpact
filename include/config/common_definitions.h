@@ -17,6 +17,8 @@ using Basis = TetrahedralBasisLinear<T>;
 using Basis = TetrahedralBasisQuadratic<T>;
 
 #else
+#warning \
+    "No Basis type defined. Using default TetrahedralBasisLinear<T> as Basis."
 using Basis = TetrahedralBasisLinear<T>;
 #endif
 

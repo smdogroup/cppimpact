@@ -21,7 +21,8 @@ class LinearElastic {
   static constexpr int spatial_dim = Basis::spatial_dim;
   static constexpr int nodes_per_element = Basis::nodes_per_element;
   static constexpr int num_quadrature_pts = Quadrature::num_quadrature_pts;
-  // static constexpr int dof_per_node = spatial_dim;  // hardcoded for now
+  static constexpr int dof_per_node = spatial_dim;  // hardcoded for now
+  static constexpr int dof_per_element = nodes_per_element * dof_per_node;
 
   // Fixed-size character array for name to avoid std::string in device code
   char name[32];
@@ -108,8 +109,64 @@ class LinearElastic {
   __host__ void calculate_f_internal_host(const T* element_xloc,
                                           const T* element_dof,
                                           T* f_internal) const {
-    // Implement the CPU-specific logic here
-    // Example: Perform matrix operations, compute internal forces, etc.
+    T pt[spatial_dim];
+    T K_e[dof_per_element * dof_per_element];
+    memset(K_e, 0, sizeof(T) * dof_per_element * dof_per_element);
+
+    for (int i = 0; i < num_quadrature_pts; i++) {
+      T weight = Quadrature::template get_quadrature_pt<T>(i, pt);
+
+      // Evaluate the derivative of the spatial dof in the computational
+      // coordinates
+      T J[spatial_dim * spatial_dim];
+      memset(J, 0, spatial_dim * spatial_dim * sizeof(T));
+      Basis::template eval_grad<spatial_dim>(pt, element_xloc, J);
+
+      // standard basis here
+      // Compute the inverse and determinant of the Jacobian matrix
+      T Jinv[spatial_dim * spatial_dim];
+      memset(Jinv, 0, spatial_dim * spatial_dim * sizeof(T));
+      T detJ = inv3x3(J, Jinv);
+
+#ifdef CPPIMPACT_DEBUG_MODE
+      if (detJ < 0.0) {
+        printf("detJ negative\n");
+      }
+#endif
+
+      // Compute the B matrix
+      // PU used here
+
+      T J_PU[spatial_dim * spatial_dim];
+      memset(J_PU, 0, spatial_dim * spatial_dim * sizeof(T));
+      Basis::template eval_grad_PU<spatial_dim>(pt, element_xloc, J_PU);
+
+      T Jinv_PU[spatial_dim * spatial_dim];
+      memset(Jinv_PU, 0, spatial_dim * spatial_dim * sizeof(T));
+      T detJ_PU = inv3x3(J_PU, Jinv_PU);
+
+      T B_matrix[6 * spatial_dim * nodes_per_element];
+      memset(B_matrix, 0, 6 * spatial_dim * nodes_per_element * sizeof(T));
+      Basis::calculate_B_matrix(Jinv, pt, B_matrix);
+
+      // Compute the material stiffness matrix D
+      T D_matrix[6 * 6];
+      memset(D_matrix, 0, 6 * 6 * sizeof(T));
+      calculate_D_matrix(D_matrix);
+
+      // Compute B^T * D * B
+      T B_T_D_B[dof_per_element * dof_per_element];
+      memset(B_T_D_B, 0, sizeof(T) * dof_per_element * dof_per_element);
+      calculate_B_T_D_B(B_matrix, D_matrix, B_T_D_B);
+
+      // Assemble the element stiffness matrix K_e
+      for (int j = 0; j < dof_per_element * dof_per_element; j++) {
+        K_e[j] += weight * detJ * B_T_D_B[j];
+      }
+    }
+
+    cppimpact_gemv<T, MatOp::NoTrans>(dof_per_element, dof_per_element, 1.0,
+                                      K_e, element_dof, 0.0, f_internal);
   }
 
   // GPU implementation
