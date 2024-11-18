@@ -3,6 +3,7 @@
 #include <chrono>
 #include <string>
 
+#include "include/config/common_definitions.h"
 #include "include/solver/analysis.h"
 #include "include/solver/mesh.h"
 #include "include/solver/physics.h"
@@ -28,10 +29,6 @@ void print_matrix(const char *name, const double *matrix, int rows, int cols) {
 }
 
 int main(int argc, char *argv[]) {
-  using Quadrature = TetrahedralQuadrature5pts;
-  using Physics = NeohookeanPhysics<T>;
-  using Analysis = FEAnalysis<T, Basis, Quadrature, Physics>;
-
   constexpr int dof_per_node = 3;
 
   bool smoke_test = false;

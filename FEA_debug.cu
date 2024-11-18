@@ -5,7 +5,6 @@
 #include <string>
 
 // clang-format off
-#include "include/config/simulation_config.h"
 #include "include/solver/analysis.h"
 // clang-format on
 

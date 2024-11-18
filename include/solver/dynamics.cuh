@@ -7,7 +7,6 @@
 #include <numeric>
 
 #include "../config/common_definitions.h"
-#include "../config/simulation_config.h"
 #include "../utils/cppimpact_defs.h"
 #include "../utils/cppimpact_utils.h"
 #include "dynamics_kernels.cuh"

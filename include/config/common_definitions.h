@@ -1,13 +1,10 @@
 #pragma once
 
+#include "../materials/linear_elastic.h"
 #include "../solver/analysis.h"
 #include "../solver/physics.h"
 #include "../solver/tetrahedral.h"
 #include "../utils/cppimpact_defs.h"
-
-// Forward declaration of the FEAnalysis template
-template <typename T, class Basis, class Quadrature, class Physics>
-class FEAnalysis;
 
 // Define the scalar type
 using T = double;
@@ -29,5 +26,8 @@ using Quadrature = TetrahedralQuadrature5pts;
 // Physics Type
 using Physics = NeohookeanPhysics<T>;
 
+// Material Type
+using Material = LinearElastic<T, Basis, Quadrature>;
+
 // Analysis Type
-using Analysis = FEAnalysis<T, Basis, Quadrature, Physics>;
+using Analysis = FEAnalysis<T, Basis, Quadrature, Physics, Material>;

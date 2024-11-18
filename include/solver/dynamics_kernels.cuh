@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../config/common_definitions.h"
-#include "../config/simulation_config.h"
 #include "analysis.h"
 #include "physics.h"
 #include "tetrahedral.h"

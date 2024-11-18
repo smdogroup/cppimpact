@@ -2,7 +2,6 @@
 #include <vector>
 
 #include "../config/common_definitions.h"
-#include "../config/simulation_config.h"
 #include "wall.h"
 
 // Update the system states via time-stepping

@@ -2,45 +2,18 @@
 
 #include <cblas.h>
 
-#include "../config/simulation_config.h"
 #include "../utils/cppimpact_blas.h"
 #include "../utils/cppimpact_defs.h"
 #include "mesh.h"
 #include "physics.h"
 #include "tetrahedral.h"
 
-template <typename T, class Basis, class Quadrature, class Physics>
-class FEAnalysis;
-
-void extract_B_node_block(const T *B, T *B_node, int node, int num_nodes) {
-  for (int i = 0; i < 6; ++i) {  // 6 rows for strain components
-    for (int j = 0; j < 3;
-         ++j) {  // 3 columns for each node's x, y, z displacement derivatives
-      B_node[i * 3 + j] = B[i * (3 * num_nodes) + (3 * node + j)];
-    }
-  }
-}
-
-void multiply_BT_node_P(const T *B_node, const T *P, T *BP_node) {
-  for (int i = 0; i < 3;
-       ++i) {  // Iterate over rows of B^T (and resulting matrix)
-    for (int j = 0; j < 3;
-         ++j) {  // Iterate over columns of P (and resulting matrix)
-      BP_node[i * 3 + j] = 0;  // Initialize the element to 0
-      for (int k = 0; k < 6;
-           ++k) {  // Iterate over columns of B^T (rows of B_node)
-        // Accumulate the product
-        BP_node[i * 3 + j] += B_node[k * 3 + i] * P[k * 3 + j];
-      }
-    }
-  }
-}
-
-template <typename T, class Basis, class Quadrature, class Physics>
+template <typename T, class Basis, class Quadrature, class Physics,
+          class Material>
 class FEAnalysis {
  public:
   // Static data taken from the element basis
-  static constexpr int spatial_dim = 3;
+  static constexpr int spatial_dim = Basis::spatial_dim;
   static constexpr int nodes_per_element = Basis::nodes_per_element;
 
   // Static data from the quadrature
@@ -160,6 +133,7 @@ class FEAnalysis {
     }
   }
 
+  // TODO: remove this duplicate function
   static CPPIMPACT_FUNCTION void calculate_B_T_D_B(const T *B_matrix,
                                                    const T *D_matrix,
                                                    T *B_T_D_B) {
@@ -232,7 +206,7 @@ class FEAnalysis {
       // Compute the material stiffness matrix D
       T D_matrix[6 * 6];
       memset(D_matrix, 0, 6 * 6 * sizeof(T));
-      Basis::template calculate_D_matrix<dof_per_node>(material, D_matrix);
+      material->calculate_D_matrix<dof_per_node>(D_matrix);
 
       // Compute B^T * D * B
       T B_T_D_B[dof_per_element * dof_per_element];
@@ -306,7 +280,7 @@ class FEAnalysis {
 
     T D_matrix[6 * 6];
     memset(D_matrix, 0, 6 * 6 * sizeof(T));
-    Basis::calculate_D_matrix(material, D_matrix);
+    material->calculate_D_matrix(D_matrix);
 
     cppimpact_gemv<T, MatOp::NoTrans>(6, 6, 1.0, D_matrix, strain, 0.0, stress);
   }
