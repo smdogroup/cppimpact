@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "cppimpact_defs.h"
+#include "../utils/cppimpact_defs.h"
 
 class TetrahedralQuadrature5pts {
  public:
@@ -482,34 +482,6 @@ spatial_dim * k + 2], Nxi[spatial_dim * i + 2] * dof[dim * i + k]);
       B[5 * 3 * nodes_per_element + idx + 2] = dNdx[0];
     }
   }
-
-  template <int dof_per_node>
-  static CPPIMPACT_FUNCTION void calculate_D_matrix(
-      BaseMaterial<T, dof_per_node>* material, T* D_matrix) {
-    // Fill the matrix
-    D_matrix[0 * 6 + 0] = D_matrix[1 * 6 + 1] = D_matrix[2 * 6 + 2] =
-        1 - material->nu;
-    D_matrix[3 * 6 + 3] = D_matrix[4 * 6 + 4] = D_matrix[5 * 6 + 5] =
-        (1 - 2 * material->nu) / 2;
-
-    D_matrix[0 * 6 + 1] = D_matrix[1 * 6 + 0] = material->nu;
-    D_matrix[0 * 6 + 2] = D_matrix[2 * 6 + 0] = material->nu;
-    D_matrix[1 * 6 + 2] = D_matrix[2 * 6 + 1] = material->nu;
-
-    // Apply the scalar multiplication
-    for (int i = 0; i < 36; i++) {
-      D_matrix[i] *=
-          material->E / ((1 + material->nu) * (1 - 2 * material->nu));
-    }
-
-    // // Print the D matrix
-    // for (int i = 0; i < 6; ++i) {
-    //   for (int j = 0; j < 6; ++j) {
-    //     printf("%f ", D_matrix[i * 6 + j]);
-    //   }
-    //   printf("\n");
-    // }
-  }
 };
 
 template <typename T>
@@ -633,26 +605,6 @@ class TetrahedralBasisLinear {
       // B[5][idx + 0], B[5][idx + 2] correspond to shear strain gamma_xz
       B[5 * 3 * nodes_per_element + idx + 0] = dNdx[2];
       B[5 * 3 * nodes_per_element + idx + 2] = dNdx[0];
-    }
-  }
-
-  template <int dof_per_node>
-  static CPPIMPACT_FUNCTION void calculate_D_matrix(
-      BaseMaterial<T, dof_per_node>* material, T* D_matrix) {
-    // Fill the matrix
-    D_matrix[0 * 6 + 0] = D_matrix[1 * 6 + 1] = D_matrix[2 * 6 + 2] =
-        1 - material->nu;
-    D_matrix[3 * 6 + 3] = D_matrix[4 * 6 + 4] = D_matrix[5 * 6 + 5] =
-        (1 - 2 * material->nu) / 2;
-
-    D_matrix[0 * 6 + 1] = D_matrix[1 * 6 + 0] = material->nu;
-    D_matrix[0 * 6 + 2] = D_matrix[2 * 6 + 0] = material->nu;
-    D_matrix[1 * 6 + 2] = D_matrix[2 * 6 + 1] = material->nu;
-
-    // Apply the scalar multiplication
-    for (int i = 0; i < 36; i++) {
-      D_matrix[i] *=
-          material->E / ((1 + material->nu) * (1 - 2 * material->nu));
     }
   }
 

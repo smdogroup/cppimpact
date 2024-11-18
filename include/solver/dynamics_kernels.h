@@ -1,18 +1,16 @@
 #pragma once
 #include <vector>
 
-#include "basematerial.h"
+#include "../config/common_definitions.h"
 #include "wall.h"
 
 // Update the system states via time-stepping
-template <typename T, int spatial_dim, int nodes_per_element, class Basis,
-          class Analysis>
-void update(int num_nodes, int num_elements, int ndof, T dt,
-            BaseMaterial<T, spatial_dim> *material, Wall<T, 2, Basis> *wall,
-            Mesh<T, nodes_per_element> *mesh, const int *element_nodes,
-            const T *vel, const T *global_xloc, const T *global_dof,
-            T *global_acc, T *global_mass, T *global_strains, T *global_stress,
-            T time) {
+template <typename T, int spatial_dim, int nodes_per_element>
+void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
+            Wall<T, 2, Basis> *wall, Mesh<T, nodes_per_element> *mesh,
+            const int *element_nodes, const T *vel, const T *global_xloc,
+            const T *global_dof, T *global_acc, T *global_mass,
+            T *global_strains, T *global_stress, T time) {
   int constexpr dof_per_element = spatial_dim * nodes_per_element;
 
   // Zero-out states
@@ -107,8 +105,8 @@ void update(int num_nodes, int num_elements, int ndof, T dt,
       Mr_inv[k] = 1.0 / element_mass_matrix_diagonals[k];
     }
 
-    Analysis::calculate_f_internal(element_xloc.data(), element_dof.data(),
-                                   element_internal_forces.data(), material);
+    material->calculate_f_internal(element_xloc.data(), element_dof.data(),
+                                   element_internal_forces.data());
 
     for (int j = 0; j < dof_per_element; j++) {
       element_acc[j] = Mr_inv[j] * (-element_internal_forces[j]);

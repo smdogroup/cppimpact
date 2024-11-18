@@ -1,7 +1,7 @@
 #pragma once
 #include <cmath>
 
-#include "cppimpact_defs.h"
+#include "../utils/cppimpact_defs.h"
 
 // we need 3 threads
 // caution: det assumed be zero-initialized

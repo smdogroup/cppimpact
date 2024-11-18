@@ -6,8 +6,7 @@
 #include <iostream>
 #include <numeric>
 
-#include "basematerial.h"
-#include "cppimpact_utils.h"
+#include "../utils/cppimpact_utils.h"
 #include "dynamics_kernels.h"
 #include "mesh.h"
 #include "wall.h"
@@ -49,7 +48,7 @@ class Dynamics {
   static constexpr int num_quadrature_pts = Quadrature::num_quadrature_pts;
 
   Mesh<T, nodes_per_element> *mesh;
-  BaseMaterial<T, dof_per_node> *material;
+  Material *material;
   Wall<T, 2, Basis> *wall;
   T *global_xloc;
   T *vel;
@@ -61,8 +60,7 @@ class Dynamics {
   T *vel_i;
   int timestep;
 
-  Dynamics(Mesh<T, nodes_per_element> *input_mesh,
-           BaseMaterial<T, dof_per_node> *input_material,
+  Dynamics(Mesh<T, nodes_per_element> *input_mesh, Material *input_material,
            Wall<T, 2, Basis> *input_wall = nullptr)
       : mesh(input_mesh),
         material(input_material),
@@ -451,7 +449,7 @@ class Dynamics {
     }
     double time = 0.0;
     // Initialize states
-    update<T, spatial_dim, nodes_per_element, Basis, Analysis>(
+    update<T, spatial_dim, nodes_per_element>(
         mesh->num_nodes, mesh->num_elements, ndof, dt, material, wall, mesh,
         element_nodes, vel, global_xloc, global_dof, global_acc, global_mass,
         global_strains, global_stress, time);
@@ -478,7 +476,7 @@ class Dynamics {
         global_dof[j] = dt * vel[j];
       }
 
-      update<T, spatial_dim, nodes_per_element, Basis, Analysis>(
+      update<T, spatial_dim, nodes_per_element>(
           mesh->num_nodes, mesh->num_elements, ndof, dt, material, wall, mesh,
           element_nodes, vel, global_xloc, global_dof, global_acc, global_mass,
           global_strains, global_stress, time);

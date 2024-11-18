@@ -6,9 +6,9 @@
 #include <iostream>
 #include <numeric>
 
-#include "basematerial.h"
-#include "cppimpact_defs.h"
-#include "cppimpact_utils.h"
+#include "../config/common_definitions.h"
+#include "../utils/cppimpact_defs.h"
+#include "../utils/cppimpact_utils.h"
 #include "dynamics_kernels.cuh"
 #include "mesh.h"
 #include "tetrahedral.h"
@@ -49,7 +49,7 @@ class Dynamics {
   static constexpr int num_quadrature_pts = Quadrature::num_quadrature_pts;
   static constexpr int dof_per_node = spatial_dim;
   Mesh<T, nodes_per_element> *mesh;
-  BaseMaterial<T, dof_per_node> *material;
+  Material *material;
   Wall<T, 2, Basis> *wall;
   T *global_xloc;
   T *vel;
@@ -61,8 +61,7 @@ class Dynamics {
   T *vel_i;
   int timestep;
 
-  Dynamics(Mesh<T, nodes_per_element> *input_mesh,
-           BaseMaterial<T, dof_per_node> *input_material,
+  Dynamics(Mesh<T, nodes_per_element> *input_mesh, Material *input_material,
            Wall<T, 2, Basis> *input_wall = nullptr)
       : mesh(input_mesh),
         material(input_material),
@@ -539,7 +538,7 @@ class Dynamics {
 
   int *d_element_nodes = nullptr;
 
-  BaseMaterial<T, spatial_dim> *d_material = nullptr;
+  Material *d_material = nullptr;
   Wall<T, 2, Basis> *d_wall = nullptr;
   int *d_wall_slave_node_indices = nullptr;
 };

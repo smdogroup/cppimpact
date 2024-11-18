@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-#include "cppimpact_defs.h"
+#include "../utils/cppimpact_defs.h"
 
 template <typename T, int dim, class Basis>
 class Wall {

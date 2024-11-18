@@ -1,8 +1,6 @@
 #pragma once
 #include <stdexcept>
 
-#include "basematerial.h"
-
 template <typename T, int dof_per_node>
 class Elastoplastic : public BaseMaterial<T, dof_per_node> {
  public:
