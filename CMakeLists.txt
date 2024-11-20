@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-
 # Set GPU architectures
 set(GPU_ARCHS "80")
 if(CUDA_VERSION_MAJOR GREATER_EQUAL 11)
@@ -29,7 +28,19 @@ set(BASIS_TYPES "linear" "quadratic")
 set(INPUT_FILES 0 1)
 set(DEFORMATIONS 0 1)
 
-# Loop over basis types
+# Option to set default basis for cpu_test and gpu_test
+option(DEFAULT_BASIS "Select the default Basis type for non-FEA_debug targets (linear/quadratic)" "linear")
+
+# Validate DEFAULT_BASIS and set corresponding macro
+if(DEFAULT_BASIS STREQUAL "linear")
+  set(DEFAULT_BASIS_MACRO "USE_LINEAR_BASIS")
+elseif(DEFAULT_BASIS STREQUAL "quadratic")
+  set(DEFAULT_BASIS_MACRO "USE_QUADRATIC_BASIS")
+else()
+  message(FATAL_ERROR "Invalid DEFAULT_BASIS value: ${DEFAULT_BASIS}. Choose 'linear' or 'quadratic'.")
+endif()
+
+# Loop over BASIS_TYPES to create FEA_debug executables
 foreach(BASIS ${BASIS_TYPES})
   # Set the basis macro
   if(BASIS STREQUAL "linear")
@@ -63,12 +74,11 @@ endforeach()
 # C++ target (cpu_test)
 add_executable(cpu_test test.cu)
 target_link_libraries(cpu_test ${LAPACK_LIBRARIES})
-# The global CPPIMPACT_DEBUG_MODE option applies to cpu_test
+target_compile_definitions(cpu_test PRIVATE -D${DEFAULT_BASIS_MACRO} -DCPPIMPACT_DEBUG_MODE)
 
 # GPU target (gpu_test)
 add_executable(gpu_test test.cu)
 set_target_properties(gpu_test PROPERTIES CUDA_ARCHITECTURES ${GPU_ARCHS})
 set_target_properties(gpu_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_compile_definitions(gpu_test PRIVATE -DCPPIMPACT_CUDA_BACKEND)
+target_compile_definitions(gpu_test PRIVATE -D${DEFAULT_BASIS_MACRO} -DCPPIMPACT_CUDA_BACKEND -DCPPIMPACT_DEBUG_MODE)
 target_compile_options(gpu_test PRIVATE -G)  # device debug
-# The global CPPIMPACT_DEBUG_MODE option applies to gpu_test

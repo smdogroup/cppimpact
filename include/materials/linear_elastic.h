@@ -1,4 +1,3 @@
-// LinearElastic.h
 #pragma once
 
 #include <cstdio>   // For printf (optional)
