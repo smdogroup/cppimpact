@@ -27,6 +27,7 @@ class JohnsonCook {
   T beta;  // Damping coefficient (if applicable)
   T H;     // Hardening parameter (if applicable)
   T Y0;    // Yield strength (if applicable)
+  T K;     // Bulk modulus
   static constexpr int spatial_dim = Basis::spatial_dim;
   static constexpr int nodes_per_element = Basis::nodes_per_element;
   static constexpr int num_quadrature_pts = Quadrature::num_quadrature_pts;
@@ -40,7 +41,7 @@ class JohnsonCook {
   __host__ __device__ JohnsonCook(T E_, T rho_, T nu_, T beta_ = 0.0,
                                   T H_ = 0.0, T Y0_ = 0.0,
                                   const char* name_input = "JohnsonCook")
-      : E(E_), rho(rho_), nu(nu_), beta(beta_), H(H_), Y0(Y0_) {
+      : E(E_), rho(rho_), nu(nu_), beta(beta_), H(H_), Y0(Y0_), K(0.0) {
     // Initialize the 'name' array
 #pragma unroll
     for (int i = 0; i < 32; ++i) {
@@ -50,10 +51,17 @@ class JohnsonCook {
         name[i] = '\0';
       }
     }
+    K = E / (3.0 * (1.0 - 2.0 * nu));
   }
 
   // Destructor
   __host__ __device__ ~JohnsonCook() {}
+
+  // #ODO : support GPU as with f_internal
+  CPPIMPACT_FUNCTION void compute_stress() {
+    for (int k = 0; k < 5; k++) {
+    }
+  }
 
   // calculate_f_internal method accessible on both host and device
   CPPIMPACT_FUNCTION void calculate_f_internal(const T* element_xloc,
@@ -83,6 +91,13 @@ class JohnsonCook {
     vec(3) = mat(0, 1);
     vec(4) = mat(0, 2);
     vec(5) = mat(1, 2);
+  }
+  __host__ void compute_pressure(const T* HenkyStrain, const T* stress) {
+    T pressureIncrement = 0.0;
+    T pressure = 0.0;
+    // Linear element, strain is same at each quadrature point
+    pressureIncrement += HenkyStrain[0] + HenkyStrain[1] + HenkyStrain[2];
+    // pressure = 1.0 / 3.0 * Trace(gpt->Stress) + K * pressureIncrement;
   }
 
   // Polar Decomposition

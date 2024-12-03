@@ -58,6 +58,23 @@ class Dynamics {
   T *global_acc;
   T *global_mass;
   T *vel_i;
+
+  // Vector/tensor at each quad point
+  T *global_stress_quads;
+  T *global_plastic_strain_quads;
+
+  // Scalar at each quad point
+  T *eqPlasticStrain;
+  T *pressure;
+  T *plasticStrainRate;
+  T *gamma;
+  T *gamma_accumulated;
+  T *yieldStress;
+  T *plasticWork;
+  T *internalEnergy;
+  T *temperature;
+  T *density;
+
   int timestep;
 
   Dynamics(Mesh<T, nodes_per_element> *input_mesh, Material *input_material,
@@ -76,7 +93,22 @@ class Dynamics {
         global_dof(new T[mesh->num_nodes * dof_per_node]),
         global_acc(new T[mesh->num_nodes * dof_per_node]),
         global_mass(new T[mesh->num_nodes * dof_per_node]),
-        vel_i(new T[mesh->num_nodes * dof_per_node]) {
+        vel_i(new T[mesh->num_nodes * dof_per_node]),
+        global_stress_quads(new T[mesh->num_elements * num_quadrature_pts * 6]),
+        global_plastic_strain_quads(
+            new T[mesh->num_elements * num_quadrature_pts * 6]),
+        eqPlasticStrain(new T[mesh->num_elements * num_quadrature_pts]),
+        pressure(new T[mesh->num_elements * num_quadrature_pts]),
+        plasticStrainRate(new T[mesh->num_elements * num_quadrature_pts]),
+        gamma(new T[mesh->num_elements * num_quadrature_pts]),
+        gamma_accumulated(new T[mesh->num_elements * num_quadrature_pts]),
+        yieldStress(new T[mesh->num_elements * num_quadrature_pts]),
+        plasticWork(new T[mesh->num_elements * num_quadrature_pts]),
+        internalEnergy(new T[mesh->num_elements * num_quadrature_pts]),
+        temperature(new T[mesh->num_elements * num_quadrature_pts]),
+        density(new T[mesh->num_elements * num_quadrature_pts])
+
+  {
     ndof = mesh->num_nodes * dof_per_node;
   }
 
@@ -90,6 +122,18 @@ class Dynamics {
     delete[] global_acc;
     delete[] global_mass;
     delete[] vel_i;
+    delete[] global_stress_quads;
+    delete[] global_plastic_strain_quads;
+    delete[] eqPlasticStrain;
+    delete[] pressure;
+    delete[] plasticStrainRate;
+    delete[] gamma;
+    delete[] gamma_accumulated;
+    delete[] yieldStress;
+    delete[] plasticWork;
+    delete[] internalEnergy;
+    delete[] temperature;
+    delete[] density;
   }
 
   // Initialize the body. Move the mesh origin to init_position and give all
@@ -442,6 +486,10 @@ class Dynamics {
       global_acc[i] = 0.0;
       global_mass[i] = 0.0;
     }
+    memset(global_stress_quads, 0,
+           sizeof(T) * 6 * mesh->num_elements * num_quadrature_pts);
+    memset(global_plastic_strain_quads, 0,
+           sizeof(T) * 6 * mesh->num_elements * num_quadrature_pts);
 
     // Intermediate velocity for vtk export
     for (int i = 0; i < ndof; i++) {
@@ -452,7 +500,10 @@ class Dynamics {
     update<T, spatial_dim, nodes_per_element>(
         mesh->num_nodes, mesh->num_elements, ndof, dt, material, wall, mesh,
         element_nodes, vel, global_xloc, global_dof, global_acc, global_mass,
-        global_strains, global_stress, time);
+        global_strains, global_stress, global_stress_quads,
+        global_plastic_strain_quads, eqPlasticStrain, pressure,
+        plasticStrainRate, gamma, gamma_accumulated, yieldStress, plasticWork,
+        internalEnergy, temperature, density, time);
 
     // b.Stagger V0 .5 = V0 + dt / 2 * a0
     // Update velocity
@@ -479,7 +530,10 @@ class Dynamics {
       update<T, spatial_dim, nodes_per_element>(
           mesh->num_nodes, mesh->num_elements, ndof, dt, material, wall, mesh,
           element_nodes, vel, global_xloc, global_dof, global_acc, global_mass,
-          global_strains, global_stress, time);
+          global_strains, global_stress, global_stress_quads,
+          global_plastic_strain_quads, eqPlasticStrain, pressure,
+          plasticStrainRate, gamma, gamma_accumulated, yieldStress, plasticWork,
+          internalEnergy, temperature, density, time);
 
       // Compute total mass (useful?)
       T total_mass = 0.0;

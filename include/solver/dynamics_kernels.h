@@ -10,7 +10,11 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
             Wall<T, 2, Basis> *wall, Mesh<T, nodes_per_element> *mesh,
             const int *element_nodes, const T *vel, const T *global_xloc,
             const T *global_dof, T *global_acc, T *global_mass,
-            T *global_strains, T *global_stress, T time) {
+            T *global_strains, T *global_stress, T *global_stress_quads,
+            T *global_plastic_strain_quads, T *eqPlasticStrain, T *pressure,
+            T *plasticStrainRate, T *gamma, T *gamma_accumulated,
+            T *yieldStress, T *plasticWork, T *internalEnergy, T *temperature,
+            T *density, T time) {
   int constexpr dof_per_element = spatial_dim * nodes_per_element;
 
   // Zero-out states
@@ -26,6 +30,10 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
   std::vector<T> element_original_xloc(dof_per_element);
   std::vector<T> element_strains(6);  // hardcoded for 3d
   std::vector<T> element_stress(6);   // hardcoded for 3d
+  std::vector<T> element_stress_quads(
+      6 * Quadrature::num_quadrature_pts);  // hardcoded for 3d
+  std::vector<T> element_plastic_strain_quads(
+      6 * Quadrature::num_quadrature_pts);  // hardcoded for 3d
   std::vector<T> element_total_dof(dof_per_element);
   std::vector<int> this_element_nodes(nodes_per_element);
 
@@ -79,6 +87,10 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
     memset(element_internal_forces.data(), 0, sizeof(T) * dof_per_element);
     memset(element_strains.data(), 0, sizeof(T) * 6);
     memset(element_stress.data(), 0, sizeof(T) * 6);
+    memset(element_stress_quads.data(), 0,
+           sizeof(T) * 6 * Quadrature::num_quadrature_pts);
+    memset(element_plastic_strain_quads.data(), 0,
+           sizeof(T) * 6 * Quadrature::num_quadrature_pts);
     memset(element_total_dof.data(), 0, sizeof(T) * dof_per_element);
     memset(element_original_xloc.data(), 0, sizeof(T) * dof_per_element);
 
@@ -98,6 +110,16 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
     // Get the element degrees of freedom
     Analysis::template get_element_dof<spatial_dim>(
         this_element_nodes.data(), global_dof, element_dof.data());
+
+    // Get the element old stress
+    // Get the element old plastic strain
+    for (int l = 0; l < Quadrature::num_quadrature_pts; l++) {
+      element_stress_quads[l] =
+          global_stress_quads[i * Quadrature::num_quadrature_pts * 6 + l];
+      element_plastic_strain_quads[l] =
+          global_plastic_strain_quads[i * Quadrature::num_quadrature_pts * 6 +
+                                      l];
+    }
 
     T Mr_inv[dof_per_element];
 
