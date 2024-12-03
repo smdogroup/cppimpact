@@ -11,8 +11,10 @@ if(CUDA_VERSION_MAJOR GREATER_EQUAL 11)
   set(GPU_ARCHS "${GPU_ARCHS};80")
 endif()
 
+
 # Find LAPACK
 find_package(LAPACK REQUIRED)
+find_package (Eigen3 3.3 REQUIRED NO_MODULE)
 
 # Option for debug mode
 option(CPPIMPACT_DEBUG_MODE "Enable debug mode" OFF)
@@ -73,12 +75,13 @@ endforeach()
 
 # C++ target (cpu_test)
 add_executable(cpu_test test.cu)
-target_link_libraries(cpu_test ${LAPACK_LIBRARIES})
+target_link_libraries(cpu_test ${LAPACK_LIBRARIES} Eigen3::Eigen)
 target_compile_definitions(cpu_test PRIVATE -D${DEFAULT_BASIS_MACRO} -DCPPIMPACT_DEBUG_MODE)
 
 # GPU target (gpu_test)
 add_executable(gpu_test test.cu)
 set_target_properties(gpu_test PROPERTIES CUDA_ARCHITECTURES ${GPU_ARCHS})
 set_target_properties(gpu_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(gpu_test PUBLIC Eigen3::Eigen)
 target_compile_definitions(gpu_test PRIVATE -D${DEFAULT_BASIS_MACRO} -DCPPIMPACT_CUDA_BACKEND -DCPPIMPACT_DEBUG_MODE)
 target_compile_options(gpu_test PRIVATE -G)  # device debug

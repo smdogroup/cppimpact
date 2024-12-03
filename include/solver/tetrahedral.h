@@ -657,4 +657,58 @@ class TetrahedralBasisLinear {
       }
     }
   }
+
+  template <class Quadrature>
+  static CPPIMPACT_FUNCTION void calculate_def_grad(const T* pt, const T* Jinv,
+                                                    const T* element_dof,
+                                                    T* F) {
+    T Nxi[spatial_dim * nodes_per_element];
+    T dNdx[spatial_dim * nodes_per_element];
+
+    memset(Nxi, 0, sizeof(T) * spatial_dim * nodes_per_element);
+    memset(dNdx, 0, sizeof(T) * spatial_dim * nodes_per_element);
+
+    eval_basis_grad(pt, Nxi);
+    for (int node = 0; node < nodes_per_element; ++node) {
+      // Transform gradients from element to global coordinates using Jinv
+      for (int i = 0; i < spatial_dim; ++i) {
+        for (int j = 0; j < spatial_dim; ++j) {
+          dNdx[spatial_dim * node + i] +=
+              Jinv[j * spatial_dim + i] * Nxi[node * spatial_dim + j];
+        }
+      }
+    }
+
+    for (int i = 0; i < spatial_dim * nodes_per_element; i++) {
+      printf("dNdx[%d] = %f\n", i, dNdx[i]);
+    }
+
+    // 3D Only
+    // TODO: tell compiler to unravel
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+        for (int k = 0; k < 3; k++) {
+          F[j + 3 * i] += dNdx[k * 3 + j] * element_dof[k * 3 + i];
+        }
+      }
+    }
+
+    // F[0] += dNdx[0] * element_dof[0];
+    // F[1] += dNdx[1] * element_dof[0];
+    // F[2] += dNdx[2] * element_dof[0];
+
+    // F[3] += dNdx[0] * element_dof[1];
+    // F[4] += dNdx[1] * element_dof[1];
+    // F[5] += dNdx[2] * element_dof[1];
+
+    // F[6] += dNdx[0] * element_dof[2];
+    // F[7] += dNdx[1] * element_dof[2];
+    // F[8] += dNdx[2] * element_dof[2];
+
+    F[0] += 1.0;
+    F[4] += 1.0;
+    F[8] += 1.0;
+    printf("F = %f %f %f %f %f %f %f %f %f\n", F[0], F[1], F[2], F[3], F[4],
+           F[5], F[6], F[7], F[8]);
+  }
 };

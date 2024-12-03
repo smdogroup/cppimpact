@@ -17,6 +17,8 @@
 #include "include/solver/dynamics.h"
 #endif
 
+#include "include/utils/cppimpact_blas.h"
+
 // Function to print matrix for manual verification
 void print_matrix(const char *name, const double *matrix, int rows, int cols) {
   std::cout << name << ":\n";
@@ -90,9 +92,20 @@ int main(int argc, char *argv[]) {
   Dynamics<T, Basis, Analysis, Quadrature> dyna(&tensile, &material, &w);
   dyna.initialize(init_position, init_velocity);
 
+  printf("Begin JC test\n");
+  T element_xloc[12] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                        0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+  T element_dof[12] = {
+      0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0, 0.0, 0.0, 0, 0.0, 0.0,
+  };
+
+  T f_internal[12];
+
+  material.calculate_f_internal(element_xloc, element_dof, f_internal);
+
   // Solve loop with total timer
   auto start = std::chrono::high_resolution_clock::now();
-  dyna.solve(dt, time_end, export_interval);
+  // dyna.solve(dt, time_end, export_interval);
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed = end - start;
   std::cout << "Elapsed time: " << elapsed.count() << " seconds" << std::endl;

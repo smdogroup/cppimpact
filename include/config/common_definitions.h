@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../materials/johnson_cook.h"
 #include "../materials/linear_elastic.h"
 #include "../solver/analysis.h"
 #include "../solver/physics.h"
@@ -29,7 +30,7 @@ using Quadrature = TetrahedralQuadrature5pts;
 using Physics = NeohookeanPhysics<T>;
 
 // Material Type
-using Material = LinearElastic<T, Basis, Quadrature>;
+using Material = JohnsonCook<T, Basis, Quadrature>;
 
 // Analysis Type
 using Analysis = FEAnalysis<T, Basis, Quadrature, Physics, Material>;
