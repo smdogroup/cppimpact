@@ -1,4 +1,3 @@
-```markdown
 # GPU Impact
 
 This project provides an explicit dynamics finite element analysis (FEA) code designed to run on both CPUs and GPUs using CUDA. It is focused on simulating hyperelastic Neo-Hookean materials on tetrahedral meshes. The code supports both linear and quadratic tetrahedral elements and uses an explicit time integration scheme suitable for highly nonlinear problems.
