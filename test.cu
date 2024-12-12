@@ -53,15 +53,24 @@ int main(int argc, char *argv[]) {
   Mesh<T, Basis::nodes_per_element> tensile;
 
   // Material Properties
-  T E = 68.9E9;  // Pa
-  T rho = 2700;  // kg/m3
+  T E = 206.9E9;  // Pa
+  T rho = 7800;   // kg/m3
   T nu = 0.33;
-  T beta = 0.0;
-  T H = 10;
-  T Y0 = 1.9 * std::sqrt(3.0);
-  std::string name = "AL6061";
+  T Y0 = 806E6;
+  T cp = 0.9;  // J/kgC
+  T B = 614E6;
+  T C = 0.0086E6;
+  T M = 1.1;
+  T N = 0.168;
+  T T0 = 20;    // deg C
+  T TM = 1540;  // deg C
+  T ref_strain_rate = 1;
+  T taylor_quinney = 0.5;
 
-  Material material(E, rho, nu, beta, H, Y0, name.c_str());
+  std::string name = "Steel 42CrMo4";
+
+  Material material(E, rho, nu, Y0, cp, B, C, M, N, T0, TM, ref_strain_rate,
+                    taylor_quinney, name.c_str());
   printf("Material: %s\n", name.c_str());
   int load_success = tensile.load_mesh(filename);
   if (load_success != 0) {
@@ -103,7 +112,7 @@ int main(int argc, char *argv[]) {
 
   material.calculate_f_internal(element_xloc, element_dof, f_internal);
 
-  // Solve loop with total timer
+  // Solve loop with total r
   auto start = std::chrono::high_resolution_clock::now();
   // dyna.solve(dt, time_end, export_interval);
   auto end = std::chrono::high_resolution_clock::now();

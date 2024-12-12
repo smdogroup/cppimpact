@@ -31,7 +31,8 @@ set(INPUT_FILES 0 1)
 set(DEFORMATIONS 0 1)
 
 # Option to set default basis for cpu_test and gpu_test
-option(DEFAULT_BASIS "Select the default Basis type for non-FEA_debug targets (linear/quadratic)" "linear")
+set(DEFAULT_BASIS "linear" CACHE STRING "Select the default Basis type for non-FEA_debug targets (linear/quadratic)")
+set_property(CACHE DEFAULT_BASIS PROPERTY STRINGS "linear" "quadratic")
 
 # Validate DEFAULT_BASIS and set corresponding macro
 if(DEFAULT_BASIS STREQUAL "linear")

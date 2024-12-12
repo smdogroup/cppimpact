@@ -1,6 +1,6 @@
 # GPU Impact
 
-This project provides an explicit dynamics finite element analysis (FEA) code designed to run on both CPUs and GPUs using CUDA. It is focused on simulating hyperelastic Neo-Hookean materials on tetrahedral meshes. The code supports both linear and quadratic tetrahedral elements and uses an explicit time integration scheme suitable for highly nonlinear problems.
+This project provides an explicit dynamics finite element analysis (FEA) code designed to run on both CPUs and GPUs using CUDA. It is focused on simulating high strain rate elastoplatic behavior for impact problems. The code supports both linear and quadratic tetrahedral elements and uses an explicit time integration scheme.
 
 ## Features
 
@@ -57,7 +57,7 @@ The provided `CMakeLists.txt` file sets up two main targets: `cpu_test` and `gpu
 
 ## Running Simulations
 
-The code expects mesh input files in the CalculiX `.inp` format.
+The code expects mesh input files in the CalculiX `.inp` format. Currently the input file is manually specified in test.cu. The output files are in vtk format for visualization in ParaView or similar software and are placed in cpu_output or gpu_output in the root folder.
 
 - **PrePoMax**:  
   Generate or convert meshes using [PrePoMax](https://prepomax.fs.um.si/) or another preprocessor that can export CalculiX meshes.
