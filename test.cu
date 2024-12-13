@@ -108,9 +108,28 @@ int main(int argc, char *argv[]) {
       0.1, 0.0, 0.0, 0.1, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 0.0,
   };
 
-  T f_internal[12];
+  T f_internal[12] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 0.0};
 
-  material.calculate_f_internal(element_xloc, element_dof, f_internal);
+  T element_old_stress[6 * 5] = {1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0,
+                                 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0,
+                                 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0,
+                                 1.0, 1.0, 1.0, 0.0, 0.0, 0.0};
+  T element_plastic_strain_eq[5] = {0.001, 0.001, 0.001, 0.001, 0.001};
+  T element_plastic_strain_rate[5] = {0.001, 0.001, 0.001, 0.001, 0.001};
+  T element_yield_stress[5] = {806E6, 806E6, 806E6, 806E6, 806E6};
+  T element_old_gamma[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+  T element_strain_increment[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  T delta_T = dt;
+  T T_current[5] = {20, 20, 20, 20, 20};
+  T gamma_cummulate[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+  T internal_energy[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+  T inelastic_energy[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+  material.calculate_f_internal(
+      element_xloc, element_dof, element_old_stress, element_plastic_strain_eq,
+      element_plastic_strain_rate, element_yield_stress, element_old_gamma,
+      element_strain_increment, delta_T, T_current, gamma_cummulate,
+      internal_energy, inelastic_energy, f_internal);
 
   // Solve loop with total r
   auto start = std::chrono::high_resolution_clock::now();

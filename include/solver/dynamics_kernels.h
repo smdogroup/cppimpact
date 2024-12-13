@@ -36,7 +36,7 @@
 //   global_stress    : Nodal stress array
 //   global_stress_quads             : Stress state stored at quadrature points
 //   (for advanced material models) global_plastic_strain_quads     : Plastic
-//   strain stored at quadrature points eqPlasticStrain, pressure, etc. :
+//   strain stored at quadrature points plastic_strain_eq, pressure, etc. :
 //   Additional fields for advanced material state tracking time             :
 //   Current simulation time
 //
@@ -55,10 +55,10 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
             const int *element_nodes, const T *vel, const T *global_xloc,
             const T *global_dof, T *global_acc, T *global_mass,
             T *global_strains, T *global_stress, T *global_stress_quads,
-            T *global_plastic_strain_quads, T *eqPlasticStrain, T *pressure,
-            T *plasticStrainRate, T *gamma, T *gamma_accumulated,
-            T *yieldStress, T *plasticWork, T *internalEnergy, T *temperature,
-            T *density, T time) {
+            T *global_plastic_strain_quads, T *plastic_strain_eq, T *pressure,
+            T *plastic_strain_rate, T *gamma, T *gamma_cummulated,
+            T *yield_stress, T *plastic_work, T *internal_energy,
+            T *inelastic_energy, T *T_current, T *density, T time) {
   constexpr int dof_per_element = spatial_dim * nodes_per_element;
 
   // Zero-out accelerations at the start of each update
@@ -74,7 +74,7 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
   std::vector<T> element_strains(
       6);  // For a 3D problem (xx, yy, zz, xy, xz, yz)
   std::vector<T> element_stress(6);  // Similarly, 6 stress components
-  std::vector<T> element_stress_quads(6 * Quadrature::num_quadrature_pts);
+  std::vector<T> element_old_stress(6 * Quadrature::num_quadrature_pts);
   std::vector<T> element_plastic_strain_quads(6 *
                                               Quadrature::num_quadrature_pts);
   std::vector<T> element_total_dof(dof_per_element);
@@ -134,7 +134,7 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
     memset(element_internal_forces.data(), 0, sizeof(T) * dof_per_element);
     memset(element_strains.data(), 0, sizeof(T) * 6);
     memset(element_stress.data(), 0, sizeof(T) * 6);
-    memset(element_stress_quads.data(), 0,
+    memset(element_old_stress.data(), 0,
            sizeof(T) * 6 * Quadrature::num_quadrature_pts);
     memset(element_plastic_strain_quads.data(), 0,
            sizeof(T) * 6 * Quadrature::num_quadrature_pts);
@@ -159,16 +159,22 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
     Analysis::template get_element_dof<spatial_dim>(
         this_element_nodes.data(), global_dof, element_dof.data());
 
-    // Load the old stress and plastic strain states at quadrature points
-    // (Currently not used directly in this snippet, but typically for advanced
-    // material models)
-    for (int l = 0; l < Quadrature::num_quadrature_pts; l++) {
-      element_stress_quads[l] =
-          global_stress_quads[i * Quadrature::num_quadrature_pts * 6 + l];
-      element_plastic_strain_quads[l] =
-          global_plastic_strain_quads[i * Quadrature::num_quadrature_pts * 6 +
-                                      l];
-    }
+    // These arrays are simply indexed with elements and quadrature points in
+    // order. May want to change this for consistency with other arrays. Ex:
+    // {(1st elem, 1st quad), (1st elem, 2nd quad), ...}
+
+    // Set pointers to the element location
+    T *element_old_stress =
+        global_stress_quads[i * Quadrature::num_quadrature_pts * 6];
+    T *element_plastic_strain_eq =
+        global_plastic_strain_quads[i * Quadrature::num_quadrature_pts];
+    T *element_plastic_strain_rate =
+        plastic_strain_rate[i * Quadrature::num_quadrature_pts];
+    T *element_yield_stress = yield_stress[i * Quadrature::num_quadrature_pts];
+    T *element_old_gamma = gamma[i * Quadrature::num_quadrature_pts];
+    T *element_strain_increment =
+        global_strains[i * Quadrature::num_quadrature_pts * 6];
+    T *element_temperature = T_current[i * Quadrature::num_quadrature_pts];
 
     // Compute inverse mass for the element DOFs
     T Mr_inv[dof_per_element];
@@ -177,8 +183,12 @@ void update(int num_nodes, int num_elements, int ndof, T dt, Material *material,
     }
 
     // Compute internal (element) forces based on current configuration
-    material->calculate_f_internal(element_xloc.data(), element_dof.data(),
-                                   element_internal_forces.data());
+    material->calculate_f_internal(
+        element_xloc.data(), element_dof.data(), element_old_stress,
+        element_plastic_strain_eq, element_plastic_strain_rate,
+        element_yield_stress, element_old_gamma, element_strain_increment, dt,
+        element_temperature, gamma_cummulated, internal_energy,
+        inelastic_energy, element_internal_forces.data());
 
     // Compute element accelerations = -M^{-1} * F_int
     for (int j = 0; j < dof_per_element; j++) {
