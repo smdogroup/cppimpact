@@ -454,7 +454,7 @@ class Dynamics {
       cudaStreamSynchronize(streams[0]);
       cudaStreamSynchronize(streams[1]);
       cudaStreamSynchronize(streams[2]);
-      printf("Time: %f\n", time);
+      //printf("Time: %f\n", time);
 
       update_dof<T>
           <<<ndof_blocks, 32, 0, streams[0]>>>(ndof, dt, d_vel, d_global_dof);

@@ -36,21 +36,32 @@ int main(int argc, char *argv[]) {
   constexpr int dof_per_node = 3;
 
   bool smoke_test = false;
+  std::string filename("../input/fuselage 5086 elements.inp");
+  
   if (argc > 1) {
     if ("-h" == std::string(argv[1]) or "--help" == std::string(argv[1])) {
-      std::printf("Usage: ./gpu_test.cu [--smoke]\n");
+      std::printf("Usage: ./gpu_test.cu [--smoke] [--input <filename and params>]\n");
+      std::printf("Ex - run a short smoke test: ./gpu_test --smoke\n"); 
+      std::printf("Ex 2 - run a full test (0.5 simulation seconds): ./gpu_test --input \"../input/fuselage 5086 elements.inp\"\n"); 
+      std::printf("Ex 3 - run a larger test (NN simulation seconds): ./gpu_test --input \"../input/fuselage 603433 elements.inp\"\n"); 
+      std::printf("Ex 4 - run a larger test (NN simulation seconds): ./gpu_test --input \"../input/0.25 cube calculix linear 5758 elem.inp\"\n"); 
       exit(0);
     }
 
     if ("--smoke" == std::string(argv[1])) {
       smoke_test = true;
     }
+    
+    //Check for an input file
+    if ("--input" == std::string(argv[1])) {
+      filename=std::string(argv[2]);      
+    }
   }
 
   std::vector<std::string> node_set_names;
   // Load in the mesh
   // std::string filename("../input/0.25 cube calculix linear 5758 elem.inp");
-  std::string filename("../input/fuselage 5086 elements.inp");
+  //std::string filename("../input/fuselage 5086 elements.inp");
 
   Mesh<T, Basis::nodes_per_element> tensile;
 
