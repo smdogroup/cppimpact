@@ -14,6 +14,7 @@ endif()
 find_package(LAPACK REQUIRED)
 
 # Option for debug mode
+# The global CPPIMPACT_DEBUG_MODE option applies to gpu_test
 option(CPPIMPACT_DEBUG_MODE "Enable debug mode" OFF)
 if(CPPIMPACT_DEBUG_MODE)
   add_definitions(-DCPPIMPACT_DEBUG_MODE)
@@ -68,5 +69,23 @@ add_executable(gpu_test test.cu)
 set_target_properties(gpu_test PROPERTIES CUDA_ARCHITECTURES ${GPU_ARCHS})
 set_target_properties(gpu_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_compile_definitions(gpu_test PRIVATE -DCPPIMPACT_CUDA_BACKEND)
-target_compile_options(gpu_test PRIVATE -G)  # device debug
-# The global CPPIMPACT_DEBUG_MODE option applies to gpu_test
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(gpu_test PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)
+    #target_compile_options(gpu_test PRIVATE -G)  # device debug
+endif()
+
+# Create output directories for visualization
+set(CPU_DIRECTORY "${CMAKE_SOURCE_DIR}/cpu_output")
+set(GPU_DIRECTORY "${CMAKE_SOURCE_DIR}/gpu_output")
+if(NOT EXISTS ${CPU_DIRECTORY})
+    file(MAKE_DIRECTORY ${CPU_DIRECTORY})
+    file(MAKE_DIRECTORY ${GPU_DIRECTORY})
+    message(STATUS "Created directory: ${CPU_DIRECTORY}")
+else()
+    message(STATUS "Directory already exists: ${CPU_DIRECTORY}")
+endif()
+
+#Copy over the validation folder
+set(SOURCE_DIR "${CMAKE_SOURCE_DIR}/validation")
+file(COPY ${SOURCE_DIR} DESTINATION ${CMAKE_BINARY_DIR})
